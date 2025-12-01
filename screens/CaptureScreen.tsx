@@ -1,10 +1,11 @@
-import React, { useEffect, useCallback, useRef } from "react";
+import React, { useEffect, useCallback, useRef, useState } from "react";
 import {
   View,
   StyleSheet,
   Pressable,
   FlatList,
   Platform,
+  Alert,
 } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
@@ -37,7 +38,8 @@ export default function CaptureScreen({ navigation }: CaptureScreenProps) {
   const tabBarHeight = useBottomTabBarHeight();
   const headerHeight = useHeaderHeight();
   const fabScale = useSharedValue(1);
-  const simulationInterval = useRef<NodeJS.Timeout | null>(null);
+  const wsRef = useRef<WebSocket | null>(null);
+  const [wsStatus, setWsStatus] = useState<"disconnected" | "connecting" | "connected">("disconnected");
 
   const {
     requests,
@@ -54,73 +56,66 @@ export default function CaptureScreen({ navigation }: CaptureScreenProps) {
     loadData();
   }, [loadData]);
 
-  const generateMockRequest = useCallback((): NetworkRequest => {
-    const methods = ["GET", "POST", "PUT", "DELETE", "PATCH"];
-    const hosts = [
-      "api.example.com",
-      "auth.service.io",
-      "cdn.images.net",
-      "payments.stripe.com",
-      "analytics.google.com",
-      "api.github.com",
-      "graph.facebook.com",
-    ];
-    const paths = [
-      "/api/v1/users",
-      "/api/v2/auth/login",
-      "/api/products",
-      "/api/orders",
-      "/webhook/callback",
-      "/graphql",
-      "/api/search",
-      "/api/notifications",
-    ];
-    const protocols = ["HTTPS", "HTTP"];
+  const connectWebSocket = useCallback(() => {
+    setWsStatus("connecting");
+    try {
+      const wsUrl = Platform.OS === "web" ? "ws://127.0.0.1:5001" : "ws://127.0.0.1:5001";
+      const ws = new WebSocket(wsUrl);
 
-    const method = methods[Math.floor(Math.random() * methods.length)];
-    const host = hosts[Math.floor(Math.random() * hosts.length)];
-    const path = paths[Math.floor(Math.random() * paths.length)];
-    const protocol = protocols[Math.floor(Math.random() * protocols.length)];
+      ws.onopen = () => {
+        setWsStatus("connected");
+      };
 
-    return {
-      id: `req-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-      timestamp: Date.now(),
-      method,
-      host,
-      ip: `${Math.floor(Math.random() * 255)}.${Math.floor(Math.random() * 255)}.${Math.floor(Math.random() * 255)}.${Math.floor(Math.random() * 255)}`,
-      port: protocol === "HTTPS" ? 443 : 80,
-      path,
-      protocol,
-      headers: {
-        "Content-Type": "application/json",
-        "User-Agent": "PCAPdroid/1.0",
-        "Accept": "application/json",
-        ...(Math.random() > 0.5 ? { "Authorization": `Bearer ${Math.random().toString(36).substr(2, 32)}` } : {}),
-        ...(Math.random() > 0.7 ? { "Cookie": `session_id=${Math.random().toString(36).substr(2, 16)}; user_token=${Math.random().toString(36).substr(2, 24)}` } : {}),
-      },
-      body: method !== "GET" ? JSON.stringify({ data: "sample" }) : "",
-    };
-  }, []);
+      ws.onmessage = (event) => {
+        try {
+          const msg = JSON.parse(event.data);
+          if (msg.type === "request" && msg.data) {
+            addRequest(msg.data);
+          }
+        } catch (e) {
+          console.error("WS parse error:", e);
+        }
+      };
+
+      ws.onerror = (e) => {
+        console.error("WS error:", e);
+        setWsStatus("disconnected");
+        Alert.alert(
+          "Connection Error",
+          "Could not connect to PCAPdroid listener. Make sure it's running on port 5001."
+        );
+      };
+
+      ws.onclose = () => {
+        setWsStatus("disconnected");
+        wsRef.current = null;
+      };
+
+      wsRef.current = ws;
+    } catch (e) {
+      console.error("WS connect error:", e);
+      setWsStatus("disconnected");
+    }
+  }, [addRequest]);
 
   const toggleCapture = useCallback(() => {
     if (isCapturing) {
       setCapturing(false);
-      if (simulationInterval.current) {
-        clearInterval(simulationInterval.current);
-        simulationInterval.current = null;
+      if (wsRef.current) {
+        wsRef.current.close();
+        wsRef.current = null;
       }
+      setWsStatus("disconnected");
     } else {
       setCapturing(true);
-      simulationInterval.current = setInterval(() => {
-        addRequest(generateMockRequest());
-      }, 1500 + Math.random() * 2000);
+      connectWebSocket();
     }
-  }, [isCapturing, setCapturing, addRequest, generateMockRequest]);
+  }, [isCapturing, setCapturing, connectWebSocket]);
 
   useEffect(() => {
     return () => {
-      if (simulationInterval.current) {
-        clearInterval(simulationInterval.current);
+      if (wsRef.current) {
+        wsRef.current.close();
       }
     };
   }, []);
