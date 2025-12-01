@@ -3,13 +3,19 @@ import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { Feather } from "@expo/vector-icons";
 import { BlurView } from "expo-blur";
 import { Platform, StyleSheet } from "react-native";
-import HomeStackNavigator from "@/navigation/HomeStackNavigator";
-import ProfileStackNavigator from "@/navigation/ProfileStackNavigator";
+import CaptureStackNavigator from "@/navigation/CaptureStackNavigator";
+import HostsStackNavigator from "@/navigation/HostsStackNavigator";
+import SessionsStackNavigator from "@/navigation/SessionsStackNavigator";
+import ScannerStackNavigator from "@/navigation/ScannerStackNavigator";
+import SettingsStackNavigator from "@/navigation/SettingsStackNavigator";
 import { useTheme } from "@/hooks/useTheme";
 
 export type MainTabParamList = {
-  HomeTab: undefined;
-  ProfileTab: undefined;
+  CaptureTab: undefined;
+  HostsTab: undefined;
+  SessionsTab: undefined;
+  ScannerTab: undefined;
+  SettingsTab: undefined;
 };
 
 const Tab = createBottomTabNavigator<MainTabParamList>();
@@ -19,7 +25,7 @@ export default function MainTabNavigator() {
 
   return (
     <Tab.Navigator
-      initialRouteName="HomeTab"
+      initialRouteName="CaptureTab"
       screenOptions={{
         tabBarActiveTintColor: theme.tabIconSelected,
         tabBarInactiveTintColor: theme.tabIconDefault,
@@ -27,16 +33,17 @@ export default function MainTabNavigator() {
           position: "absolute",
           backgroundColor: Platform.select({
             ios: "transparent",
-            android: theme.backgroundRoot,
+            android: theme.backgroundDefault,
           }),
-          borderTopWidth: 0,
+          borderTopWidth: 1,
+          borderTopColor: theme.backgroundSecondary,
           elevation: 0,
         },
         tabBarBackground: () =>
           Platform.OS === "ios" ? (
             <BlurView
               intensity={100}
-              tint={isDark ? "dark" : "light"}
+              tint="dark"
               style={StyleSheet.absoluteFill}
             />
           ) : null,
@@ -44,22 +51,52 @@ export default function MainTabNavigator() {
       }}
     >
       <Tab.Screen
-        name="HomeTab"
-        component={HomeStackNavigator}
+        name="CaptureTab"
+        component={CaptureStackNavigator}
         options={{
-          title: "Home",
+          title: "Capture",
           tabBarIcon: ({ color, size }) => (
-            <Feather name="home" size={size} color={color} />
+            <Feather name="radio" size={size} color={color} />
           ),
         }}
       />
       <Tab.Screen
-        name="ProfileTab"
-        component={ProfileStackNavigator}
+        name="HostsTab"
+        component={HostsStackNavigator}
         options={{
-          title: "Profile",
+          title: "Hosts",
           tabBarIcon: ({ color, size }) => (
-            <Feather name="user" size={size} color={color} />
+            <Feather name="server" size={size} color={color} />
+          ),
+        }}
+      />
+      <Tab.Screen
+        name="SessionsTab"
+        component={SessionsStackNavigator}
+        options={{
+          title: "Sessions",
+          tabBarIcon: ({ color, size }) => (
+            <Feather name="key" size={size} color={color} />
+          ),
+        }}
+      />
+      <Tab.Screen
+        name="ScannerTab"
+        component={ScannerStackNavigator}
+        options={{
+          title: "Scanner",
+          tabBarIcon: ({ color, size }) => (
+            <Feather name="shield" size={size} color={color} />
+          ),
+        }}
+      />
+      <Tab.Screen
+        name="SettingsTab"
+        component={SettingsStackNavigator}
+        options={{
+          title: "Settings",
+          tabBarIcon: ({ color, size }) => (
+            <Feather name="settings" size={size} color={color} />
           ),
         }}
       />
