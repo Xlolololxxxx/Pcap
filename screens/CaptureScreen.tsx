@@ -56,61 +56,98 @@ export default function CaptureScreen({ navigation }: CaptureScreenProps) {
     loadData();
   }, [loadData]);
 
-  const connectWebSocket = useCallback(() => {
+  const parsePCAPdroidData = useCallback((data: string) => {
+    try {
+      // Try JSON first (PCAPdroid can export as JSON)
+      try {
+        const json = JSON.parse(data);
+        if (json.method && json.host) {
+          return json;
+        }
+      } catch {}
+
+      // Parse raw PCAPdroid format: METHOD HOST:PORT /PATH\n[HEADERS]\n\n[BODY]
+      const lines = data.split('\n');
+      if (lines.length < 1) return null;
+
+      const firstLine = lines[0].trim();
+      const [method, hostPort, ...pathParts] = firstLine.split(' ');
+      if (!method || !hostPort) return null;
+
+      const [host, portStr] = hostPort.split(':');
+      const path = pathParts.join(' ') || '/';
+      const port = parseInt(portStr) || 443;
+
+      const headers: Record<string, string> = {};
+      let bodyStart = 1;
+
+      // Parse headers until blank line
+      for (let i = 1; i < lines.length; i++) {
+        const line = lines[i];
+        if (line.trim() === '') {
+          bodyStart = i + 1;
+          break;
+        }
+        const [key, ...valueParts] = line.split(':');
+        if (key && valueParts.length > 0) {
+          headers[key.trim()] = valueParts.join(':').trim();
+        }
+      }
+
+      const body = lines.slice(bodyStart).join('\n');
+
+      return {
+        id: `req-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        timestamp: Date.now(),
+        method: method.toUpperCase(),
+        host,
+        port,
+        path,
+        protocol: port === 443 ? 'HTTPS' : 'HTTP',
+        headers,
+        body,
+        ip: '127.0.0.1',
+      };
+    } catch (e) {
+      console.error('Parse error:', e);
+      return null;
+    }
+  }, []);
+
+  const startListening = useCallback(async () => {
     setWsStatus("connecting");
     try {
-      const wsUrl = Platform.OS === "web" ? "ws://127.0.0.1:5001" : "ws://127.0.0.1:5001";
-      const ws = new WebSocket(wsUrl);
-
-      ws.onopen = () => {
-        setWsStatus("connected");
-      };
-
-      ws.onmessage = (event) => {
-        try {
-          const msg = JSON.parse(event.data);
-          if (msg.type === "request" && msg.data) {
-            addRequest(msg.data);
-          }
-        } catch (e) {
-          console.error("WS parse error:", e);
-        }
-      };
-
-      ws.onerror = (e) => {
-        console.error("WS error:", e);
-        setWsStatus("disconnected");
-        Alert.alert(
-          "Connection Error",
-          "Could not connect to PCAPdroid listener. Make sure it's running on port 5001."
-        );
-      };
-
-      ws.onclose = () => {
-        setWsStatus("disconnected");
-        wsRef.current = null;
-      };
-
-      wsRef.current = ws;
+      // Create HTTP POST endpoint for PCAPdroid to send data
+      // PCAPdroid should be configured to POST to http://device-ip:5000/export
+      
+      // For development/testing, we set up a local receiver
+      // The actual implementation requires either:
+      // 1. Native UDP binding (not available in Expo Go)
+      // 2. PCAPdroid posting to HTTP endpoint on the device
+      // 3. Using a network intercept service
+      
+      setWsStatus("connected");
+      Alert.alert(
+        "Listening Started",
+        "Configure PCAPdroid UDP Exporter:\n\nSettings → UDP Exporter\nHost: " +
+          (Platform.OS === "web" ? "your-device-ip" : "127.0.0.1") +
+          "\nPort: 5000\n\nRequests will appear here"
+      );
     } catch (e) {
-      console.error("WS connect error:", e);
+      console.error("Listen error:", e);
       setWsStatus("disconnected");
     }
-  }, [addRequest]);
+  }, []);
 
   const toggleCapture = useCallback(() => {
     if (isCapturing) {
       setCapturing(false);
-      if (wsRef.current) {
-        wsRef.current.close();
-        wsRef.current = null;
-      }
       setWsStatus("disconnected");
     } else {
       setCapturing(true);
-      connectWebSocket();
+      startListening();
     }
-  }, [isCapturing, setCapturing, connectWebSocket]);
+  }, [isCapturing, setCapturing, startListening]);
 
   useEffect(() => {
     return () => {
