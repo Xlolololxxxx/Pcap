@@ -30,6 +30,8 @@ export interface FilterConfig {
   protocols: string[];
   endpoints: string[];
   methods: string[];
+  regexPatterns: string[];
+  bodySearch: string;
 }
 
 export interface CaptureState {

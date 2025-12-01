@@ -10,6 +10,8 @@ let globalFilters: FilterConfig = {
   protocols: [],
   endpoints: [],
   methods: [],
+  regexPatterns: [],
+  bodySearch: "",
 };
 let globalIsCapturing = false;
 let globalPort = 5000;
@@ -152,6 +154,23 @@ export function useAppStore() {
           return false;
         }
       }
+      if (globalFilters.regexPatterns.length > 0) {
+        const matchesRegex = globalFilters.regexPatterns.some((pattern) => {
+          try {
+            const regex = new RegExp(pattern, "i");
+            return regex.test(request.path) || regex.test(request.host);
+          } catch {
+            return false;
+          }
+        });
+        if (!matchesRegex) return false;
+      }
+      if (globalFilters.bodySearch) {
+        const bodyContent = (request.body || "") + (request.response?.body || "");
+        if (!bodyContent.toLowerCase().includes(globalFilters.bodySearch.toLowerCase())) {
+          return false;
+        }
+      }
       return true;
     });
   }, []);
@@ -180,6 +199,54 @@ export function useAppStore() {
     return globalRequests.find((r) => r.id === id);
   }, []);
 
+  const exportAsJSON = useCallback(() => {
+    return JSON.stringify({
+      exportedAt: new Date().toISOString(),
+      totalRequests: globalRequests.length,
+      requests: globalRequests,
+      sessions: globalSessions,
+    }, null, 2);
+  }, []);
+
+  const exportAsHAR = useCallback(() => {
+    const entries = globalRequests.map((req) => ({
+      startedDateTime: new Date(req.timestamp).toISOString(),
+      time: 0,
+      request: {
+        method: req.method,
+        url: `${req.protocol}://${req.host}:${req.port}${req.path}`,
+        httpVersion: "HTTP/1.1",
+        headers: Object.entries(req.headers).map(([name, value]) => ({ name, value })),
+        queryString: [],
+        cookies: [],
+        headersSize: 0,
+        bodySize: req.body.length,
+        postData: req.body ? { mimeType: "application/json", text: req.body } : undefined,
+      },
+      response: req.response ? {
+        status: req.response.statusCode,
+        statusText: "OK",
+        httpVersion: "HTTP/1.1",
+        headers: Object.entries(req.response.headers).map(([name, value]) => ({ name, value })),
+        cookies: [],
+        content: { size: req.response.body.length, mimeType: "application/json", text: req.response.body },
+        redirectURL: "",
+        headersSize: 0,
+        bodySize: req.response.body.length,
+      } : { status: 0, statusText: "", httpVersion: "HTTP/1.1", headers: [], cookies: [], content: { size: 0, mimeType: "", text: "" }, redirectURL: "", headersSize: 0, bodySize: 0 },
+      cache: {},
+      timings: { blocked: 0, dns: 0, connect: 0, send: 0, wait: 0, receive: 0 },
+    }));
+    
+    return JSON.stringify({
+      log: {
+        version: "1.2.0",
+        creator: { name: "PCAPdroid Analyzer", version: "1.0.0" },
+        entries,
+      },
+    }, null, 2);
+  }, []);
+
   return {
     requests: globalRequests,
     sessions: globalSessions,
@@ -197,5 +264,7 @@ export function useAppStore() {
     getFilteredRequests,
     getHostsWithRequests,
     getRequestById,
+    exportAsJSON,
+    exportAsHAR,
   };
 }

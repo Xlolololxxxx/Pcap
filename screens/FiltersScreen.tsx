@@ -34,6 +34,8 @@ export default function FiltersScreen({ navigation }: FiltersScreenProps) {
   const [ipInput, setIpInput] = useState("");
   const [hostnameInput, setHostnameInput] = useState("");
   const [endpointInput, setEndpointInput] = useState("");
+  const [regexInput, setRegexInput] = useState("");
+  const [bodySearchInput, setBodySearchInput] = useState("");
 
   useEffect(() => {
     setLocalFilters(filters);
@@ -57,8 +59,12 @@ export default function FiltersScreen({ navigation }: FiltersScreenProps) {
       protocols: [],
       endpoints: [],
       methods: [],
+      regexPatterns: [],
+      bodySearch: "",
     };
     setLocalFilters(emptyFilters);
+    setRegexInput("");
+    setBodySearchInput("");
     await updateFilters(emptyFilters);
   };
 
