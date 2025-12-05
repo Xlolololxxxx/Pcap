@@ -1,0 +1,4 @@
+flask
+pyshark
+requests
+psutil
